@@ -121,7 +121,9 @@ module Homebrew
           method or 'livecheck' block with 'skip'.)
         EOS
 
-        odie "You have too many PRs open: close or merge some first!" if GitHub.too_many_open_prs?(tap)
+        if !args.write_only? && GitHub.too_many_open_prs?(tap)
+          odie "You have too many PRs open: close or merge some first!"
+        end
 
         formula_spec = formula.stable
         odie "#{formula}: no stable specification found!" if formula_spec.blank?
@@ -135,7 +137,7 @@ module Homebrew
         remote_branch = tap.git_repository.origin_branch_name
         previous_branch = "-"
 
-        check_pull_requests(formula, tap_remote_repo, state: "open")
+        check_pull_requests(formula, tap_remote_repo, state: "open") unless args.write_only?
 
         all_formulae = []
         if args.bump_synced.present?
@@ -159,6 +161,7 @@ module Homebrew
 
           new_url = args.url
           new_version = args.version
+
           check_new_version(commit_formula, tap_remote_repo, version: new_version) if new_version.present?
 
           opoo "This formula has patches that may be resolved upstream." if commit_formula.patchlist.present?
@@ -174,6 +177,7 @@ module Homebrew
           end
 
           old_hash = commit_formula_spec.checksum&.hexdigest
+
           new_hash = args.sha256
           new_tag = args.tag
           new_revision = args.revision
@@ -213,10 +217,9 @@ module Homebrew
           elsif new_url.blank? && new_version.blank?
             raise UsageError, "#{commit_formula}: no `--url` or `--version` argument specified!"
           else
-            next unless new_version.present?
+            new_url ||= PyPI.update_pypi_url(old_url, new_version) if new_version.present?
 
-            new_url ||= PyPI.update_pypi_url(old_url, new_version)
-            if new_url.blank?
+            if new_url.blank? && new_version.present?
               new_url = update_url(old_url, old_version, new_version)
               if new_mirrors.blank? && old_mirrors.present?
                 new_mirrors = old_mirrors.map do |old_mirror|
@@ -230,6 +233,9 @@ module Homebrew
                 and old URL are both:
                   #{new_url}
               EOS
+            end
+            if new_url.blank?
+              odie "There was an issue generating the updated url, you may need to create the PR manually"
             end
             check_new_version(commit_formula, tap_remote_repo, url: new_url) if new_version.blank?
             resource_path, forced_version = fetch_resource_and_forced_version(commit_formula, new_version, new_url)
@@ -395,10 +401,14 @@ module Homebrew
 
             if github_release_data.present?
               pre = "pre" if github_release_data["prerelease"].present?
+              # maximum length of PR body is 65,536 characters so let's truncate release notes to half of that.
+              body = Formatter.truncate(github_release_data["body"], max: 32_768)
+
               formula_pr_message += <<~XML
                 <details>
                   <summary>#{pre}release notes</summary>
-                  <pre>#{github_release_data["body"]}</pre>
+                  <pre>#{body}</pre>
+                  <p>View the full release notes at #{github_release_data["html_url"]}.</p>
                 </details>
               XML
             end
@@ -407,7 +417,7 @@ module Homebrew
           {
             sourcefile_path:    commit_formula.path,
             old_contents:,
-            commit_message:     "#{commit_formula.name} #{args.version}",
+            commit_message:     "#{commit_formula.name} #{new_formula_version}",
             additional_files:   alias_rename,
             formula_pr_message:,
             formula_name:       commit_formula.name,
@@ -426,7 +436,7 @@ module Homebrew
           # If `brew audit` fails, revert the changes made to any formula.
           commits.each do |revert|
             revert_formula = Formula[revert[:formula_name]]
-            revert_formula.path.atomic_write(revert[:old_contents]) unless args.dry_run?
+            revert_formula.path.atomic_write(revert[:old_contents]) if !args.dry_run? && !args.write_only?
             revert_alias_rename = revert[:additional_files]
             if revert_alias_rename && (source = revert_alias_rename.first) && (destination = revert_alias_rename.last)
               FileUtils.mv source, destination
@@ -437,6 +447,7 @@ module Homebrew
         end
 
         new_formula_version = T.must(commits.first)[:new_version]
+
         pr_title = if args.bump_synced.nil?
           "#{formula.name} #{new_formula_version}"
         else
@@ -462,7 +473,7 @@ module Homebrew
           tap_remote_repo:,
           pr_message:,
         }
-        GitHub.create_bump_pr(pr_info, args:)
+        GitHub.create_bump_pr(pr_info, args:) unless args.write_only?
       end
 
       private

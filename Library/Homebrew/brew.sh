@@ -256,7 +256,14 @@ check-run-command-as-root() {
   [[ -f /proc/1/cgroup ]] && grep -E "azpl_job|actions_job|docker|garden|kubepods" -q /proc/1/cgroup && return
 
   # `brew services` may need `sudo` for system-wide daemons.
-  [[ "${HOMEBREW_COMMAND}" == "services" ]] && return
+  if [[ "${HOMEBREW_COMMAND}" == "services" ]]
+  then
+    # Need to disable Bootsnap when running as root to avoid permission errors:
+    # https://github.com/Homebrew/brew/issues/19904
+    export HOMEBREW_NO_BOOTSNAP="1"
+
+    return
+  fi
 
   # It's fine to run this as root as it's not changing anything.
   [[ "${HOMEBREW_COMMAND}" == "--prefix" ]] && return
@@ -591,6 +598,11 @@ case "$1" in
   --version | -v)
     source "${HOMEBREW_LIBRARY}/Homebrew/cmd/--version.sh"
     homebrew-version
+    exit 0
+    ;;
+  mcp-server)
+    source "${HOMEBREW_LIBRARY}/Homebrew/cmd/mcp-server.sh"
+    homebrew-mcp-server "$@"
     exit 0
     ;;
 esac
@@ -1070,6 +1082,22 @@ then
 else
   export HOMEBREW_GITHUB_PACKAGES_AUTH="Bearer QQ=="
 fi
+
+# Avoid picking up any random `sudo` in `PATH`.
+if [[ -x /usr/bin/sudo ]]
+then
+  SUDO=/usr/bin/sudo
+else
+  # Do this after ensuring we're using default Bash builtins.
+  SUDO="$(command -v sudo 2>/dev/null)"
+fi
+
+# Reset sudo timestamp to avoid running unauthorized sudo commands
+if [[ -n "${SUDO}" ]]
+then
+  "${SUDO}" --reset-timestamp 2>/dev/null || true
+fi
+unset SUDO
 
 if [[ -n "${HOMEBREW_BASH_COMMAND}" ]]
 then

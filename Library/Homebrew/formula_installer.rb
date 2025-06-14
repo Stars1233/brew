@@ -520,6 +520,7 @@ class FormulaInstaller
     oh1 "Installing #{Formatter.identifier(formula.full_name)} #{options}".strip if show_header?
 
     if (tap = formula.tap) && tap.should_report_analytics?
+      require "utils/analytics"
       Utils::Analytics.report_package_event(:formula_install, package_name: formula.name, tap_name: tap.name,
 on_request: installed_on_request?, options:)
     end
@@ -892,8 +893,10 @@ on_request: installed_on_request?, options:)
     return if quiet?
 
     caveats = Caveats.new(formula)
-
     return if caveats.empty?
+
+    Homebrew.messages.record_completions_and_elisp(caveats.completions_and_elisp)
+    return if caveats.caveats.empty?
 
     @show_summary_heading = true
     ohai "Caveats", caveats.to_s

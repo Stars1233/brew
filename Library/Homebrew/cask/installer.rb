@@ -4,14 +4,13 @@
 require "formula_installer"
 require "unpack_strategy"
 require "utils/topological_hash"
+require "utils/analytics"
 
 require "cask/config"
 require "cask/download"
 require "cask/migrator"
 require "cask/quarantine"
 require "cask/tab"
-
-require "cgi"
 
 module Cask
   # Installer for a {Cask}.
@@ -151,7 +150,7 @@ module Cask
 
       oh1 "Installing Cask #{Formatter.identifier(@cask)}"
       # GitHub Actions globally disables Gatekeeper.
-      opoo "macOS's Gatekeeper has been disabled for this Cask" if !quarantine? && !GitHub::Actions.env_set?
+      opoo_outside_github_actions "macOS's Gatekeeper has been disabled for this Cask" unless quarantine?
       stage
 
       @cask.config = @cask.default_config.merge(old_config)

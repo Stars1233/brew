@@ -24,7 +24,7 @@ jobs:
     steps:
       - name: Set up Homebrew
         id: set-up-homebrew
-        uses: Homebrew/actions/setup-homebrew@master
+        uses: Homebrew/actions/setup-homebrew@main
         with:
           core: false
           cask: false
@@ -52,7 +52,7 @@ jobs:
         run: vale docs/
 
       - name: Install Ruby
-        uses: ruby/setup-ruby@eaecf785f6a34567a6d97f686bbb7bccc1ac1e5c # v1.237.0
+        uses: ruby/setup-ruby@a4effe49ee8ee5b8b5091268c473a4628afb5651 # v1.245.0
         with:
           bundler-cache: true
           working-directory: docs
@@ -67,7 +67,7 @@ jobs:
       - name: Generate formulae.brew.sh API samples
         if: github.repository == 'Homebrew/formulae.brew.sh'
         working-directory: docs
-        run: ../script/generate-api-samples.rb
+        run: ../script/generate-api-samples.rb --template
 
       - name: Build the site and check for broken links
         working-directory: docs

@@ -15,7 +15,7 @@ module Homebrew
           If no options are passed, use `origin/master` as the start commit.
         EOS
         switch "--to-tag",
-               description: "Set `HOMEBREW_UPDATE_TO_TAG` to test updating between tags."
+               description: "Set `$HOMEBREW_UPDATE_TO_TAG` to test updating between tags."
         switch "--keep-tmp",
                description: "Retain the temporary directory containing the new repository clone."
         flag   "--commit=",
@@ -142,6 +142,7 @@ module Homebrew
 
       private
 
+      sig { returns(String) }
       def git_tags
         tags = Utils.popen_read("git", "tag", "--list", "--sort=-version:refname")
         if tags.blank?

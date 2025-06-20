@@ -33,8 +33,8 @@ module Homebrew
                description: "If brewing fails, open an interactive debugging session with access to IRB " \
                             "or a shell inside the temporary build directory."
         switch "--display-times",
-               env:         :display_install_times,
-               description: "Print install times for each package at the end of the run."
+               description: "Print install times for each package at the end of the run.",
+               env:         :display_install_times
         switch "-f", "--force",
                description: "Install formulae without checking for previously installed keg-only or " \
                             "non-migrated versions. When installing casks, overwrite existing files " \
@@ -43,6 +43,10 @@ module Homebrew
                description: "Print the verification and post-install steps."
         switch "-n", "--dry-run",
                description: "Show what would be installed, but do not actually install anything."
+        switch "--ask",
+               description: "Ask for confirmation before downloading and installing formulae. " \
+                            "Print download and install sizes of bottles and dependencies.",
+               env:         :ask
         [
           [:switch, "--formula", "--formulae", {
             description: "Treat all named arguments as formulae.",
@@ -122,11 +126,6 @@ module Homebrew
           }],
           [:switch, "--overwrite", {
             description: "Delete files that already exist in the prefix while linking.",
-          }],
-          [:switch, "--ask", {
-            description: "Ask for confirmation before downloading and installing formulae. " \
-                         "Print bottles and dependencies download size and install size.",
-            env:         :ask,
           }],
         ].each do |args|
           options = args.pop
@@ -218,6 +217,7 @@ module Homebrew
         end
 
         if casks.any?
+          Install.ask_casks casks if args.ask?
           if args.dry_run?
             if (casks_to_install = casks.reject(&:installed?).presence)
               ohai "Would install #{::Utils.pluralize("cask", casks_to_install.count, include_count: true)}:"
@@ -310,7 +310,7 @@ module Homebrew
         Install.perform_preinstall_checks_once
         Install.check_cc_argv(args.cc)
 
-        Install.ask(formulae, args: args) if args.ask?
+        Install.ask_formulae(installed_formulae, args: args) if args.ask?
 
         Install.install_formulae(
           installed_formulae,

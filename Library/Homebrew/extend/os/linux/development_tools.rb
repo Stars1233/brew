@@ -20,7 +20,7 @@ module OS
             glibc_path
           elsif (homebrew_path = HOMEBREW_PREFIX/"bin/#{tool}").executable?
             homebrew_path
-          elsif File.executable?((system_path = "/usr/bin/#{tool}"))
+          elsif File.executable?(system_path = "/usr/bin/#{tool}")
             Pathname.new system_path
           end
         end
@@ -62,7 +62,7 @@ module OS
       def build_system_info
         super.merge({
           "glibc_version"     => OS::Linux::Glibc.version.to_s.presence,
-          "oldest_cpu_family" => Hardware.oldest_cpu.to_s,
+          "oldest_cpu_family" => ::Hardware.oldest_cpu.to_s,
         })
       end
     end

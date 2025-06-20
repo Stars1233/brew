@@ -37,7 +37,6 @@ module Homebrew
       end
 
       def global_post_install; end
-      alias generic_global_post_install global_post_install
 
       def check_prefix
         if (Hardware::CPU.intel? || Hardware::CPU.in_rosetta2?) &&
@@ -331,7 +330,9 @@ module Homebrew
       end
 
       # If asking the user is enabled, show dependency and size information.
-      def ask(formulae, args:)
+      def ask_formulae(formulae, args:)
+        return if formulae.empty?
+
         ohai "Looking for bottles..."
 
         sized_formulae = compute_sized_formulae(formulae, args: args)
@@ -346,6 +347,15 @@ module Homebrew
         ask_input
       end
 
+      def ask_casks(casks)
+        return if casks.empty?
+
+        puts "#{::Utils.pluralize("Cask", casks.count, plural: "s")} \
+(#{casks.count}): #{casks.join(", ")}\n\n"
+
+        ask_input
+      end
+
       private
 
       def perform_preinstall_checks(all_fatal: false)
@@ -355,7 +365,6 @@ module Homebrew
         Diagnostic.checks(:supported_configuration_checks, fatal: all_fatal)
         Diagnostic.checks(:fatal_preinstall_checks)
       end
-      alias generic_perform_preinstall_checks perform_preinstall_checks
 
       def attempt_directory_creation
         Keg.must_exist_directories.each do |dir|

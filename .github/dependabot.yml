@@ -1,72 +1,44 @@
+# This file is synced from the `.github` repository, do not modify it directly.
+---
 version: 2
-
 updates:
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
-    allow:
-      - dependency-type: all
-    # The actions in triage-issues.yml are updated in the Homebrew/.github repo
-    ignore:
-      - dependency-name: actions/stale
-    groups:
-      artifacts:
-        patterns:
-          - actions/*-artifact
-    open-pull-requests-limit: 10
+- package-ecosystem: github-actions
+  directory: "/"
+  schedule:
+    interval: weekly
+    day: friday
+    time: '08:00'
+    timezone: Etc/UTC
+  allow:
+  - dependency-type: all
+  groups:
+    github-actions:
+      patterns:
+      - "*"
+- package-ecosystem: docker
+  directory: "/"
+  schedule:
+    interval: weekly
+    day: friday
+    time: '08:00'
+    timezone: Etc/UTC
+  allow:
+  - dependency-type: all
+  groups:
+    docker:
+      patterns:
+      - "*"
+- package-ecosystem: devcontainers
+  directory: "/"
+  schedule:
+    interval: weekly
+    day: friday
+    time: '08:00'
+    timezone: Etc/UTC
+  allow:
+  - dependency-type: all
+  groups:
+    devcontainers:
+      patterns:
+      - "*"
 
-  - package-ecosystem: bundler
-    directory: /Library/Homebrew
-    schedule:
-      interval: daily
-    allow:
-      - dependency-type: all
-    groups:
-      rspec:
-        patterns:
-          - "rspec*"
-      sorbet:
-        patterns:
-          - "sorbet*"
-    open-pull-requests-limit: 10
-
-  - package-ecosystem: npm
-    directory: /
-    schedule:
-      interval: daily
-    allow:
-      - dependency-type: all
-    open-pull-requests-limit: 10
-
-  - package-ecosystem: docker
-    directory: /
-    schedule:
-      interval: daily
-    allow:
-      - dependency-type: all
-    open-pull-requests-limit: 10
-
-  - package-ecosystem: devcontainers
-    directory: /
-    schedule:
-      interval: daily
-    allow:
-      - dependency-type: all
-    open-pull-requests-limit: 10
-
-  - package-ecosystem: pip
-    directory: /
-    schedule:
-      interval: daily
-    allow:
-      - dependency-type: all
-    open-pull-requests-limit: 10
-
-  - package-ecosystem: pip
-    directory: /Library/Homebrew/formula-analytics/
-    schedule:
-      interval: daily
-    allow:
-      - dependency-type: all
-    open-pull-requests-limit: 10

@@ -5,7 +5,6 @@ require "json"
 require "time"
 require "unpack_strategy"
 require "lazy_object"
-require "cgi"
 require "lock_file"
 require "system_command"
 
@@ -384,9 +383,12 @@ class AbstractFileDownloadStrategy < AbstractDownloadStrategy
     if url.match?(URI::DEFAULT_PARSER.make_regexp)
       uri = URI(url)
 
-      if uri.query
-        query_params = CGI.parse(uri.query)
-        query_params["response-content-disposition"].each do |param|
+      if (uri_query = uri.query.presence)
+        URI.decode_www_form(uri_query).each do |key, param|
+          components[:query] << param if search_query
+
+          next if key != "response-content-disposition"
+
           query_basename = param[/attachment;\s*filename=(["']?)(.+)\1/i, 2]
           return File.basename(query_basename) if query_basename
         end
@@ -396,10 +398,6 @@ class AbstractFileDownloadStrategy < AbstractDownloadStrategy
         components[:path] = uri_path.split("/").filter_map do |part|
           URI::DEFAULT_PARSER.unescape(part).presence
         end
-      end
-
-      if search_query && (uri_query = uri.query.presence)
-        components[:query] = URI.decode_www_form(uri_query).map { _2 }
       end
     else
       components[:path] = [url]
@@ -471,8 +469,6 @@ class CurlDownloadStrategy < AbstractFileDownloadStrategy
         ohai "Downloading #{url}"
 
         cached_location_valid = cached_location.exist?
-        v = version
-        cached_location_valid = false if v.is_a?(Cask::DSL::Version) && v.latest?
 
         resolved_url, _, last_modified, file_size, is_redirection = begin
           resolve_url_basename_time_file_size(url, timeout: Utils::Timer.remaining!(end_time))
@@ -486,10 +482,17 @@ class CurlDownloadStrategy < AbstractFileDownloadStrategy
         # The cached location is no longer fresh if either:
         # - Last-Modified value is newer than the file's timestamp
         # - Content-Length value is different than the file's size
-        if cached_location_valid && !is_redirection
-          newer_last_modified = last_modified && last_modified > cached_location.mtime
-          different_file_size = file_size&.nonzero? && file_size != cached_location.size
-          cached_location_valid = !(newer_last_modified || different_file_size)
+        if cached_location_valid && last_modified && last_modified > cached_location.mtime
+          ohai "Ignoring #{cached_location}",
+               "Cached modified time #{cached_location.mtime.iso8601} is before" \
+               "Last-Modified header: #{last_modified.iso8601}"
+          cached_location_valid = false
+        end
+        if cached_location_valid && file_size&.nonzero? && file_size != cached_location.size
+          ohai "Ignoring #{cached_location}",
+               "Cached size #{cached_location.size} differs from " \
+               "Content-Length header: #{file_size}"
+          cached_location_valid = false
         end
 
         if cached_location_valid
@@ -705,7 +708,12 @@ class CurlGitHubPackagesDownloadStrategy < CurlDownloadStrategy
     meta[:headers] ||= []
     # GitHub Packages authorization header.
     # HOMEBREW_GITHUB_PACKAGES_AUTH set in brew.sh
-    meta[:headers] << "Authorization: #{HOMEBREW_GITHUB_PACKAGES_AUTH}"
+    # If using a private GHCR mirror with no Authentication set then do not add the header. In all other cases add it.
+    if !Homebrew::EnvConfig.artifact_domain.presence ||
+       Homebrew::EnvConfig.docker_registry_basic_auth_token.presence ||
+       Homebrew::EnvConfig.docker_registry_token.presence
+      meta[:headers] << "Authorization: #{HOMEBREW_GITHUB_PACKAGES_AUTH}"
+    end
     super
   end
 
@@ -1349,7 +1357,7 @@ class CVSDownloadStrategy < VCSDownloadStrategy
     end
 
     command! "cvs",
-             args:    [*quiet_flag, "-d", @url, "checkout", "-d", cached_location.basename, @module],
+             args:    [*quiet_flag, "-d", @url, "checkout", "-d", basename.to_s, @module],
              chdir:   cached_location.dirname,
              timeout: Utils::Timer.remaining(timeout)
   end
@@ -1541,7 +1549,7 @@ class FossilDownloadStrategy < VCSDownloadStrategy
   sig { override.returns(Time) }
   def source_modified_time
     out = silent_command("fossil", args: ["info", "tip", "-R", cached_location]).stdout
-    Time.parse(T.must(out[/^uuid: +\h+ (.+)$/, 1]))
+    Time.parse(T.must(out[/^(hash|uuid): +\h+ (.+)$/, 1]))
   end
 
   # Return last commit's unique identifier for the repository.
@@ -1550,7 +1558,7 @@ class FossilDownloadStrategy < VCSDownloadStrategy
   sig { override.returns(String) }
   def last_commit
     out = silent_command("fossil", args: ["info", "tip", "-R", cached_location]).stdout
-    T.must(out[/^uuid: +(\h+) .+$/, 1])
+    T.must(out[/^(hash|uuid): +(\h+) .+$/, 1])
   end
 
   sig { override.returns(T::Boolean) }

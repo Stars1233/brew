@@ -3,10 +3,9 @@ name: "CodeQL"
 on:
   push:
     branches:
+      - main
       - master
   pull_request:
-    branches:
-      - master
 
 defaults:
   run:
@@ -28,7 +27,7 @@ jobs:
           persist-credentials: false
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@28deaeda66b76a05916b6923827895f2b14ab387 # v3.28.16
+        uses: github/codeql-action/init@181d5eefc20863364f96762470ba6f862bdef56b # v3.29.2
         with:
           languages: ruby
           config: |
@@ -36,4 +35,4 @@ jobs:
               - Library/Homebrew/vendor
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@28deaeda66b76a05916b6923827895f2b14ab387 # v3.28.16
+        uses: github/codeql-action/analyze@181d5eefc20863364f96762470ba6f862bdef56b # v3.29.2

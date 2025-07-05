@@ -28,6 +28,9 @@ class RuboCop::Cask::AST::Stanza
   def auto_updates?; end
 
   sig { returns(T::Boolean) }
+  def bash_completion?; end
+
+  sig { returns(T::Boolean) }
   def binary?; end
 
   sig { returns(T::Boolean) }
@@ -50,6 +53,9 @@ class RuboCop::Cask::AST::Stanza
 
   sig { returns(T::Boolean) }
   def dictionary?; end
+
+  sig { returns(T::Boolean) }
+  def fish_completion?; end
 
   sig { returns(T::Boolean) }
   def font?; end
@@ -124,6 +130,9 @@ class RuboCop::Cask::AST::Stanza
   def on_system_block?(*args, &block); end
 
   sig { returns(T::Boolean) }
+  def on_tahoe?; end
+
+  sig { returns(T::Boolean) }
   def on_ventura?; end
 
   sig { returns(T::Boolean) }
@@ -191,4 +200,7 @@ class RuboCop::Cask::AST::Stanza
 
   sig { returns(T::Boolean) }
   def zap?; end
+
+  sig { returns(T::Boolean) }
+  def zsh_completion?; end
 end

@@ -73,11 +73,10 @@ module Homebrew
                description: "`install` prints output from commands as they are run. " \
                             "`check` lists all missing dependencies."
         switch "--no-upgrade",
-               env:         :bundle_no_upgrade,
                description: "`install` does not run `brew upgrade` on outdated dependencies. " \
                             "`check` does not check for outdated dependencies. " \
-                            "Note they may still be upgraded by `brew install` if needed. " \
-                            "This is enabled by default if `$HOMEBREW_BUNDLE_NO_UPGRADE` is set."
+                            "Note they may still be upgraded by `brew install` if needed.",
+               env:         :bundle_no_upgrade
         switch "--upgrade",
                description: "`install` runs `brew upgrade` on outdated dependencies, " \
                             "even if `$HOMEBREW_BUNDLE_NO_UPGRADE` is set."
@@ -87,41 +86,36 @@ module Homebrew
         switch "--install",
                description: "Run `install` before continuing to other operations e.g. `exec`."
         switch "--services",
-               env:         :bundle_services,
-               description: "Temporarily start services while running the `exec` or `sh` command. " \
-                            "This is enabled by default if `$HOMEBREW_BUNDLE_SERVICES` is set."
+               description: "Temporarily start services while running the `exec` or `sh` command.",
+               env:         :bundle_services
         switch "-f", "--force",
                description: "`install` runs with `--force`/`--overwrite`. " \
                             "`dump` overwrites an existing `Brewfile`. " \
                             "`cleanup` actually performs its cleanup operations."
         switch "--cleanup",
-               env:         :bundle_install_cleanup,
-               description: "`install` performs cleanup operation, same as running `cleanup --force`. " \
-                            "This is enabled by default if `$HOMEBREW_BUNDLE_INSTALL_CLEANUP` is set and " \
-                            "`--global` is passed."
+               description: "`install` performs cleanup operation, same as running `cleanup --force`.",
+               env:         [:bundle_install_cleanup, "--global"]
         switch "--all",
                description: "`list` all dependencies."
-        switch "--formula", "--brews",
-               description: "`list` or `dump` Homebrew formula dependencies."
+        switch "--formula", "--formulae", "--brews",
+               description: "`list`, `dump` or `cleanup` Homebrew formula dependencies."
         switch "--cask", "--casks",
-               description: "`list` or `dump` Homebrew cask dependencies."
+               description: "`list`, `dump` or `cleanup` Homebrew cask dependencies."
         switch "--tap", "--taps",
-               description: "`list` or `dump` Homebrew tap dependencies."
+               description: "`list`, `dump` or `cleanup` Homebrew tap dependencies."
         switch "--mas",
                description: "`list` or `dump` Mac App Store dependencies."
         switch "--whalebrew",
                description: "`list` or `dump` Whalebrew dependencies."
         switch "--vscode",
-               description: "`list` or `dump` VSCode (and forks/variants) extensions."
+               description: "`list`, `dump` or `cleanup` VSCode (and forks/variants) extensions."
         switch "--no-vscode",
-               env:         :bundle_dump_no_vscode,
-               description: "`dump` without VSCode (and forks/variants) extensions. " \
-                            "This is enabled by default if `$HOMEBREW_BUNDLE_DUMP_NO_VSCODE` is set."
+               description: "`dump` without VSCode (and forks/variants) extensions.",
+               env:         :bundle_dump_no_vscode
         switch "--describe",
-               env:         :bundle_dump_describe,
                description: "`dump` adds a description comment above each line, unless the " \
-                            "dependency does not have a description. " \
-                            "This is enabled by default if `$HOMEBREW_BUNDLE_DUMP_DESCRIBE` is set."
+                            "dependency does not have a description.",
+               env:         :bundle_dump_describe
         switch "--no-restart",
                description: "`dump` does not add `restart_service` to formula lines."
         switch "--zap",
@@ -168,7 +162,7 @@ module Homebrew
         zap = args.zap?
         Homebrew::Bundle.upgrade_formulae = args.upgrade_formulae
 
-        no_type_args = !args.brews? && !args.casks? && !args.taps? && !args.mas? && !args.whalebrew? && !args.vscode?
+        no_type_args = [args.formulae?, args.casks?, args.taps?, args.mas?, args.whalebrew?, args.vscode?].none?
 
         if args.install?
           if [nil, "install", "upgrade"].include?(subcommand)
@@ -215,7 +209,7 @@ module Homebrew
             describe:   args.describe?,
             no_restart: args.no_restart?,
             taps:       args.taps? || no_type_args,
-            brews:      args.brews? || no_type_args,
+            formulae:   args.formulae? || no_type_args,
             casks:      args.casks? || no_type_args,
             mas:        args.mas? || no_type_args,
             whalebrew:  args.whalebrew? || no_type_args,
@@ -226,7 +220,13 @@ module Homebrew
           exec_editor(Homebrew::Bundle::Brewfile.path(global:, file:))
         when "cleanup"
           require "bundle/commands/cleanup"
-          Homebrew::Bundle::Commands::Cleanup.run(global:, file:, force:, zap:)
+          Homebrew::Bundle::Commands::Cleanup.run(
+            global:, file:, force:, zap:,
+            formulae:  args.formulae? || no_type_args,
+            casks:  args.casks? || no_type_args,
+            taps:   args.taps? || no_type_args,
+            vscode: args.vscode? || no_type_args
+          )
         when "check"
           require "bundle/commands/check"
           Homebrew::Bundle::Commands::Check.run(global:, file:, no_upgrade:, verbose:)
@@ -235,7 +235,7 @@ module Homebrew
           Homebrew::Bundle::Commands::List.run(
             global:,
             file:,
-            brews:     args.brews? || args.all? || no_type_args,
+            formulae:  args.formulae? || args.all? || no_type_args,
             casks:     args.casks? || args.all?,
             taps:      args.taps? || args.all?,
             mas:       args.mas? || args.all?,
@@ -243,9 +243,9 @@ module Homebrew
             vscode:    args.vscode? || args.all?,
           )
         when "add", "remove"
-          # We intentionally omit the `s` from `brews`, `casks`, and `taps` for ease of handling later.
+          # We intentionally omit the s from `brews`, `casks`, and `taps` for ease of handling later.
           type_hash = {
-            brew:      args.brews?,
+            brew:      args.formulae?,
             cask:      args.casks?,
             tap:       args.taps?,
             mas:       args.mas?,
@@ -276,17 +276,7 @@ module Homebrew
             _subcommand, *named_args = args.named
             named_args
           when "sh"
-            preferred_path = Utils::Shell.preferred_path(default: "/bin/bash")
-            notice = unless Homebrew::EnvConfig.no_env_hints?
-              <<~EOS
-                Your shell has been configured to use a build environment from your `Brewfile`.
-                This should help you build stuff.
-                Hide these hints with HOMEBREW_NO_ENV_HINTS (see `man brew`).
-                When done, type `exit`.
-              EOS
-            end
-            ENV["HOMEBREW_FORCE_API_AUTO_UPDATE"] = nil
-            [Utils::Shell.shell_with_prompt("brew bundle", preferred_path:, notice:)]
+            ["sh"]
           when "env"
             ["env"]
           end

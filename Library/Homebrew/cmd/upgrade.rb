@@ -29,8 +29,8 @@ module Homebrew
                description: "If brewing fails, open an interactive debugging session with access to IRB " \
                             "or a shell inside the temporary build directory."
         switch "--display-times",
-               env:         :display_install_times,
-               description: "Print install times for each package at the end of the run."
+               description: "Print install times for each package at the end of the run.",
+               env:         :display_install_times
         switch "-f", "--force",
                description: "Install formulae without checking for previously installed keg-only or " \
                             "non-migrated versions. When installing casks, overwrite existing files " \
@@ -39,6 +39,10 @@ module Homebrew
                description: "Print the verification and post-install steps."
         switch "-n", "--dry-run",
                description: "Show what would be upgraded, but do not actually upgrade anything."
+        switch "--ask",
+               description: "Ask for confirmation before downloading and upgrading formulae. " \
+                            "Print download, install and net install sizes of bottles and dependencies.",
+               env:         :ask
         [
           [:switch, "--formula", "--formulae", {
             description: "Treat all named arguments as formulae. If no named arguments " \
@@ -70,11 +74,6 @@ module Homebrew
           }],
           [:switch, "--overwrite", {
             description: "Delete files that already exist in the prefix while linking.",
-          }],
-          [:switch, "--ask", {
-            description: "Ask for confirmation before downloading and upgrading formulae. " \
-                         "Print bottles and dependencies download size, install and net install size.",
-            env:         :ask,
           }],
         ].each do |args|
           options = args.pop
@@ -221,10 +220,7 @@ module Homebrew
 
         Install.perform_preinstall_checks_once
 
-        # Main block: if asking the user is enabled, show dependency and size information.
-        Install.ask(formulae_to_install, args: args) if args.ask?
-
-        Upgrade.upgrade_formulae(
+        formulae_installer = Upgrade.formula_installers(
           formulae_to_install,
           flags:                      args.flags_only,
           dry_run:                    args.dry_run?,
@@ -240,10 +236,13 @@ module Homebrew
           verbose:                    args.verbose?,
         )
 
-        Upgrade.check_installed_dependents(
+        return false if formulae_installer.blank?
+
+        dependants = Upgrade.dependants(
           formulae_to_install,
           flags:                      args.flags_only,
           dry_run:                    args.dry_run?,
+          ask:                        args.ask?,
           force_bottle:               args.force_bottle?,
           build_from_source_formulae: args.build_from_source_formulae,
           interactive:                args.interactive?,
@@ -255,12 +254,36 @@ module Homebrew
           verbose:                    args.verbose?,
         )
 
+        # Main block: if asking the user is enabled, show dependency and size information.
+        Install.ask_formulae(formulae_installer, dependants, args: args) if args.ask?
+
+        Upgrade.upgrade_formulae(formulae_installer,
+                                 dry_run: args.dry_run?,
+                                 verbose: args.verbose?)
+
+        Upgrade.upgrade_dependents(
+          dependants, formulae_to_install,
+          flags:                      args.flags_only,
+          dry_run:                    args.dry_run?,
+          force_bottle:               args.force_bottle?,
+          build_from_source_formulae: args.build_from_source_formulae,
+          interactive:                args.interactive?,
+          keep_tmp:                   args.keep_tmp?,
+          debug_symbols:              args.debug_symbols?,
+          force:                      args.force?,
+          debug:                      args.debug?,
+          quiet:                      args.quiet?,
+          verbose:                    args.verbose?
+        )
+
         true
       end
 
       sig { params(casks: T::Array[Cask::Cask]).returns(T::Boolean) }
       def upgrade_outdated_casks(casks)
         return false if args.formula?
+
+        Install.ask_casks casks if args.ask?
 
         Cask::Upgrade.upgrade_casks(
           *casks,

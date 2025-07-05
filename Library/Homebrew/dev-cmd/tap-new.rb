@@ -44,12 +44,11 @@ module Homebrew
         titleized_repository = tap.repository.dup
         titleized_user[0] = titleized_user[0].upcase
         titleized_repository[0] = titleized_repository[0].upcase
-        root_url = GitHubPackages.root_url(tap.user, "homebrew-#{tap.repository}") if args.github_packages?
+        # Duplicate assignment to silence `assigned but unused variable` warning
+        root_url = root_url = GitHubPackages.root_url(tap.user, "homebrew-#{tap.repository}") if args.github_packages?
 
         (tap.path/"Formula").mkpath
 
-        # FIXME: https://github.com/errata-ai/vale/issues/818
-        # <!-- vale off -->
         readme = <<~MARKDOWN
           # #{titleized_user} #{titleized_repository}
 
@@ -70,7 +69,6 @@ module Homebrew
 
           `brew help`, `man brew` or check [Homebrew's documentation](https://docs.brew.sh).
         MARKDOWN
-        # <!-- vale on -->
         write_path(tap, "README.md", readme)
 
         tests_yml = <<~ERB
@@ -99,7 +97,7 @@ module Homebrew
               steps:
                 - name: Set up Homebrew
                   id: set-up-homebrew
-                  uses: Homebrew/actions/setup-homebrew@master
+                  uses: Homebrew/actions/setup-homebrew@main
                   with:
                     token: ${{ github.token }}
 
@@ -126,7 +124,7 @@ module Homebrew
                     echo "::add-mask::${base64_token}"
                     echo "token=${base64_token}" >> "${GITHUB_OUTPUT}"
           <% end -%>
-                - run: brew test-bot --only-formulae<% if root_url %> --root-url='<%= root_url %>'<% end %>
+                - run: brew test-bot --only-formulae#{" --root-url=#{root_url}" if root_url}
                   if: github.event_name == 'pull_request'
           <% if args.github_packages? -%>
                   env:
@@ -164,12 +162,12 @@ module Homebrew
                 pull-requests: write
               steps:
                 - name: Set up Homebrew
-                  uses: Homebrew/actions/setup-homebrew@master
+                  uses: Homebrew/actions/setup-homebrew@main
                   with:
                     token: ${{ github.token }}
 
                 - name: Set up git
-                  uses: Homebrew/actions/git-user-config@master
+                  uses: Homebrew/actions/git-user-config@main
 
                 - name: Pull bottles
                   env:
@@ -182,7 +180,7 @@ module Homebrew
                   run: brew pr-pull --debug --tap="$GITHUB_REPOSITORY" "$PULL_REQUEST"
 
                 - name: Push commits
-                  uses: Homebrew/actions/git-try-push@master
+                  uses: Homebrew/actions/git-try-push@main
                   with:
                     branch: <%= branch %>
 
